@@ -1,0 +1,1694 @@
+<!DOCTYPE html>
+<html lang="pt-AO">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Gamek Fresmart Express 1 — Controlo de Compras CCTV</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    /* Base & Custom Utilities (No external dependencies required for core UI) */
+    :root {
+      --bg-app: #f1f5f9;
+      --bg-card: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --border-subtle: #e2e8f0;
+    }
+    html.dark {
+      --bg-app: #090d16;
+      --bg-card: #111827;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-subtle: #1e293b;
+    }
+    body {
+      background-color: var(--bg-app);
+      color: var(--text-main);
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* Signature Canvas Touch Prevention */
+    #signature-pad {
+      touch-action: none;
+      cursor: crosshair;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.4);
+      border-radius: 9999px;
+    }
+
+    /* Print Styles — A4 Landscape Official Store & CCTV Sheet */
+    @media print {
+      @page {
+        size: A4 landscape;
+        margin: 10mm;
+      }
+      body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-size: 11px !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .print-only {
+        display: block !important;
+      }
+      .print-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+      table.print-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+      }
+      table.print-table th,
+      table.print-table td {
+        border: 1px solid #334155 !important;
+        padding: 5px 6px !important;
+        text-align: left;
+        color: #000000 !important;
+        background: #ffffff !important;
+        vertical-align: middle;
+      }
+      table.print-table th {
+        background-color: #e2e8f0 !important;
+        font-weight: 700 !important;
+        text-transform: uppercase;
+        font-size: 9.5px !important;
+      }
+      .sig-print-img {
+        max-height: 28px;
+        max-width: 90px;
+        display: block;
+        margin: 0 auto;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen transition-colors duration-200 selection:bg-emerald-500 selection:text-white">
+
+  <!-- Toast Notification Banner (Replaces alert) -->
+  <div id="toast-container" class="no-print fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-[calc(100%-2rem)] pointer-events-none"></div>
+
+  <!-- Confirmation Modal (Replaces confirm) -->
+  <div id="confirm-modal" class="no-print fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+      <div class="flex items-center gap-3 mb-3">
+        <div id="confirm-icon-wrap" class="w-11 h-11 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 id="confirm-title" class="text-lg font-bold text-slate-900 dark:text-white">Confirmar Ação</h3>
+          <p id="confirm-subtitle" class="text-xs text-slate-500 dark:text-slate-400">Operação de Controlo CCTV</p>
+        </div>
+      </div>
+      <p id="confirm-message" class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-6"></p>
+      <div class="flex items-center justify-end gap-3">
+        <button id="confirm-cancel-btn" type="button" class="px-4 py-2.5 rounded-xl text-sm font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition">
+          Cancelar
+        </button>
+        <button id="confirm-ok-btn" type="button" class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/20 transition">
+          Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Signature Preview Modal -->
+  <div id="sig-modal" class="no-print fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Comprovativo de Assinatura</h3>
+        <button type="button" onclick="closeSigModal()" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <p id="sig-modal-meta" class="text-xs text-slate-500 dark:text-slate-400 mb-3"></p>
+      <div class="bg-white border border-slate-300 rounded-xl p-4 flex items-center justify-center min-h-[160px]">
+        <img id="sig-modal-img" src="" alt="Assinatura do Colaborador" class="max-h-40 object-contain" />
+      </div>
+      <div class="mt-4 flex justify-end">
+        <button type="button" onclick="closeSigModal()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800 text-white dark:bg-slate-700">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRINT-ONLY OFFICIAL HEADER -->
+  <div class="print-only hidden mb-4">
+    <div class="flex justify-between items-start border-b-2 border-slate-900 pb-2">
+      <div>
+        <h1 class="text-lg font-extrabold uppercase tracking-tight">GAMEK FRESMART EXPRESS 1 — CONTROLO DIÁRIO DE COMPRAS DE COLABORADORES</h1>
+        <p class="text-xs text-slate-700 mt-0.5">Registo Operacional de Caixa, Prevenção de Perdas & Auditoria CCTV (Luanda, Angola)</p>
+      </div>
+      <div class="text-right text-xs">
+        <div><strong>Data:</strong> <span id="print-date"></span></div>
+        <div><strong>Turno:</strong> <span id="print-shift"></span></div>
+        <div><strong>Operador CCTV:</strong> <span id="print-cctv-op"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP SHELL -->
+  <div class="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 print-container">
+
+    <!-- TOP HEADER & SHIFT BAR -->
+    <header class="no-print bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm mb-5">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <!-- Brand & Live Luanda Clock -->
+        <div class="flex items-start sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-3.5">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center shadow-lg shadow-emerald-600/20 shrink-0">
+              <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <h1 class="text-base sm:text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                  Gamek Fresmart Express 1
+                </h1>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  CCTV ATIVO
+                </span>
+              </div>
+              <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
+                Controlo Diário de Compras de Colaboradores
+              </p>
+            </div>
+          </div>
+
+          <!-- Theme Toggle Button (Mobile top-right) -->
+          <button id="theme-toggle-mobile" type="button" aria-label="Alternar Tema" class="lg:hidden p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+            <svg class="w-5 h-5 hidden dark:block text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>
+            <svg class="w-5 h-5 block dark:hidden text-slate-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
+          </button>
+        </div>
+
+        <!-- Shift Controls & Real-time Luanda Clock -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 lg:flex lg:items-center gap-2.5 sm:gap-3">
+          <!-- Luanda Clock -->
+          <div class="flex items-center justify-between sm:justify-start gap-2.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80">
+            <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+              <div id="live-time" class="font-mono text-sm font-bold text-slate-900 dark:text-white leading-tight">--:--:--</div>
+              <div id="live-date" class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">Luanda, AO</div>
+            </div>
+          </div>
+
+          <!-- CCTV Operator Selector -->
+          <div class="flex flex-col">
+            <label for="cctv-operator-select" class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-0.5 px-1">Operador CCTV Serviço</label>
+            <select id="cctv-operator-select" class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none">
+              <option value="João Domingos">João Domingos (CCTV)</option>
+              <option value="Francisco Chivela">Francisco Chivela (CCTV)</option>
+            </select>
+          </div>
+
+          <!-- Shift Selector -->
+          <div class="flex flex-col">
+            <label for="shift-select" class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-0.5 px-1">Turno Atual</label>
+            <select id="shift-select" class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none">
+              <option value="Manhã (07h00 - 15h00)">Manhã (07h - 15h)</option>
+              <option value="Tarde (15h00 - 22h00)">Tarde (15h - 22h)</option>
+              <option value="Fecho / Dia Completo">Fecho / Dia Completo</option>
+            </select>
+          </div>
+
+          <!-- Desktop Theme Toggle -->
+          <button id="theme-toggle-desktop" type="button" title="Alternar Tema Escuro/Claro" class="hidden lg:flex items-center justify-center p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition">
+            <svg class="w-5 h-5 hidden dark:block text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>
+            <svg class="w-5 h-5 block dark:hidden text-slate-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- REAL-TIME KPI CARDS -->
+    <section class="no-print grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+      <!-- Total Purchases -->
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Registos</span>
+          <span class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z"/></svg>
+          </span>
+        </div>
+        <div id="kpi-count" class="text-2xl font-extrabold text-slate-900 dark:text-white">0</div>
+        <div class="text-[11px] text-slate-400 mt-0.5">compras hoje</div>
+      </div>
+
+      <!-- Total Value Kz -->
+      <div class="col-span-2 sm:col-span-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Valor Total (Kz)</span>
+          <span class="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z"/></svg>
+          </span>
+        </div>
+        <div id="kpi-total-kz" class="text-xl sm:text-2xl font-extrabold text-blue-600 dark:text-blue-400 truncate">0,00 Kz</div>
+        <div class="text-[11px] text-slate-400 mt-0.5">soma de talões</div>
+      </div>
+
+      <!-- Conferido OK -->
+      <div class="bg-white dark:bg-slate-900 border border-emerald-500/30 dark:border-emerald-500/25 rounded-2xl p-3.5 sm:p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Conferidos OK</span>
+          <span class="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+          </span>
+        </div>
+        <div id="kpi-ok" class="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">0</div>
+        <div class="text-[11px] text-slate-400 mt-0.5">validados CCTV</div>
+      </div>
+
+      <!-- Pendentes CCTV -->
+      <div class="bg-white dark:bg-slate-900 border border-amber-500/30 dark:border-amber-500/25 rounded-2xl p-3.5 sm:p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-amber-700 dark:text-amber-400">Pendentes CCTV</span>
+          <span class="p-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </span>
+        </div>
+        <div id="kpi-pending" class="text-2xl font-extrabold text-amber-600 dark:text-amber-400">0</div>
+        <div class="text-[11px] text-slate-400 mt-0.5">aguardam revisão</div>
+      </div>
+
+      <!-- Divergências -->
+      <div class="bg-white dark:bg-slate-900 border border-rose-500/30 dark:border-rose-500/25 rounded-2xl p-3.5 sm:p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-rose-700 dark:text-rose-400">Divergências</span>
+          <span class="p-1.5 rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+          </span>
+        </div>
+        <div id="kpi-div" class="text-2xl font-extrabold text-rose-600 dark:text-rose-400">0</div>
+        <div class="text-[11px] text-slate-400 mt-0.5">alerta auditoria</div>
+      </div>
+    </section>
+
+    <!-- NAVIGATION TABS + WORKFLOW EXPORT BAR -->
+    <div class="no-print flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
+      <!-- Primary View Switcher -->
+      <div class="inline-flex p-1.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm w-full md:w-auto">
+        <button id="tab-registo" type="button" onclick="switchTab('registo')" class="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition bg-emerald-600 text-white shadow">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          Registo & Controlo CCTV
+        </button>
+        <button id="tab-equipa" type="button" onclick="switchTab('equipa')" class="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/></svg>
+          Equipa & Resumo (36)
+        </button>
+      </div>
+
+      <!-- Export & Workflow Action Buttons -->
+      <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+        <button type="button" onclick="copyWhatsAppSummary()" class="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/></svg>
+          Copiar Resumo WhatsApp
+        </button>
+
+        <button type="button" onclick="exportCSV()" class="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+          Exportar CSV / Excel
+        </button>
+
+        <button type="button" onclick="printSheet()" class="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white shadow-sm transition">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z"/></svg>
+          Imprimir / PDF A4
+        </button>
+
+        <button type="button" onclick="confirmClearDay()" class="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-400 border border-rose-500/30 transition">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+          Limpar Dia / Novo Turno
+        </button>
+      </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 1: REGISTO DE COMPRA & TABELA OPERACIONAL CCTV                   -->
+    <!-- ===================================================================== -->
+    <div id="view-registo" class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+      <!-- LEFT COLUMN: QUICK REGISTRATION FORM -->
+      <section class="no-print lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div class="flex items-center gap-2">
+            <span class="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            </span>
+            <div>
+              <h2 id="form-heading" class="text-base font-extrabold text-slate-900 dark:text-white">Novo Registo de Compra</h2>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">Preenchimento rápido em loja / caixa</p>
+            </div>
+          </div>
+          <button id="cancel-edit-btn" type="button" onclick="resetForm()" class="hidden px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400">
+            Cancelar Edição
+          </button>
+        </div>
+
+        <form id="purchase-form" class="space-y-3.5" onsubmit="handleFormSubmit(event)">
+          <input type="hidden" id="edit-record-id" value="" />
+
+          <!-- Collaborator Search & Quick Select -->
+          <div>
+            <label for="collab-search" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              1. Colaborador (Pesquisar ou Selecionar) *
+            </label>
+            <div class="relative">
+              <input
+                type="text"
+                id="collab-search"
+                autocomplete="off"
+                placeholder="Escreva o nome (ex: Manuel, Adélia, Costa...)"
+                class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+              <!-- Autocomplete Dropdown -->
+              <div id="collab-dropdown" class="hidden absolute z-30 left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl divide-y divide-slate-100 dark:divide-slate-700/70"></div>
+            </div>
+            <!-- Fallback Full Select for easy touch scrolling -->
+            <select id="collab-select" class="mt-2 w-full px-3.5 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none">
+              <option value="">-- Ou escolha na lista dos 36 colaboradores --</option>
+            </select>
+          </div>
+
+          <!-- Auto-filled Role Badge & Editable Time -->
+          <div class="grid grid-cols-12 gap-2.5">
+            <div class="col-span-8">
+              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Função / Secção</label>
+              <div id="collab-role-display" class="px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 text-slate-500 dark:text-slate-400 truncate">
+                Selecione um colaborador
+              </div>
+            </div>
+            <div class="col-span-4">
+              <label for="purchase-time" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Hora *</label>
+              <input
+                type="time"
+                id="purchase-time"
+                required
+                class="w-full px-2.5 py-2.5 rounded-xl text-sm font-mono font-bold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+          </div>
+
+          <!-- Items Purchased -->
+          <div>
+            <label for="purchase-items" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              2. Artigos Comprados (Descrição e Qtd.) *
+            </label>
+            <textarea
+              id="purchase-items"
+              rows="2"
+              required
+              placeholder="Ex: 2x Pão francês, 1x Sumo Compal 330ml, 1x Fiambre 200g"
+              class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 outline-none"
+            ></textarea>
+          </div>
+
+          <!-- Receipt Number & Total Value Kz -->
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label for="receipt-number" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                3. N.º Talão / Fatura *
+              </label>
+              <input
+                type="text"
+                id="receipt-number"
+                required
+                placeholder="Ex: FT 0842"
+                class="w-full px-3.5 py-2.5 rounded-xl text-sm font-mono font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+            <div>
+              <label for="total-kz" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                4. Valor Total (Kz) *
+              </label>
+              <input
+                type="number"
+                id="total-kz"
+                step="0.01"
+                min="0"
+                required
+                placeholder="Ex: 1500"
+                class="w-full px-3.5 py-2.5 rounded-xl text-sm font-mono font-bold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+          </div>
+
+          <!-- Cashier & Initial CCTV Status -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label for="cashier-select" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                5. Operador de Caixa *
+              </label>
+              <select id="cashier-select" required class="w-full px-3 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                <option value="André José">André José</option>
+                <option value="Patrícia Francisco">Patrícia Francisco</option>
+                <option value="Dialumbaka Augusto">Dialumbaka Augusto</option>
+                <option value="Inês Nambelo">Inês Nambelo</option>
+                <option value="Teresa Leão">Teresa Leão</option>
+                <option value="Domingos Fernando">Domingos Fernando</option>
+              </select>
+            </div>
+            <div>
+              <label for="initial-status" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                6. Estado CCTV Inicial
+              </label>
+              <select id="initial-status" class="w-full px-3 py-2.5 rounded-xl text-sm font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                <option value="Pendente CCTV">🟡 Pendente CCTV</option>
+                <option value="Conferido OK">🟢 Conferido OK</option>
+                <option value="Divergência">🔴 Divergência</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Touch Signature Pad -->
+          <div class="pt-1">
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-xs font-bold text-slate-700 dark:text-slate-300">
+                7. Assinatura Digital do Colaborador
+              </label>
+              <button type="button" onclick="clearSignaturePad()" class="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline">
+                Limpar Assinatura
+              </button>
+            </div>
+            <div class="relative rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white overflow-hidden">
+              <canvas id="signature-pad" class="w-full h-24 block"></canvas>
+              <span id="sig-placeholder" class="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-400 font-medium">
+                Assine aqui com o dedo ou rato (opcional)
+              </span>
+            </div>
+            <label class="mt-2 inline-flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" id="quick-confirm-check" class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
+              <span class="text-xs text-slate-600 dark:text-slate-400">Confirmação presencial sem assinatura no ecrã</span>
+            </label>
+          </div>
+
+          <!-- Submit Button -->
+          <button type="submit" id="submit-btn" class="w-full py-3.5 px-4 rounded-xl text-sm font-extrabold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-600/25 active:scale-[0.99] transition flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+            <span id="submit-btn-text">Registar Compra na Folha</span>
+          </button>
+        </form>
+      </section>
+
+      <!-- RIGHT COLUMN: INTERACTIVE CCTV TABLE & MOBILE CARDS -->
+      <section class="lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm print-container">
+
+        <!-- Filter & Search Controls -->
+        <div class="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <!-- Status Filter Pills -->
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" onclick="setStatusFilter('ALL')" data-filter="ALL" class="filter-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white dark:bg-white dark:text-slate-900 transition">
+              Todos (<span id="count-all">0</span>)
+            </button>
+            <button type="button" onclick="setStatusFilter('Pendente CCTV')" data-filter="Pendente CCTV" class="filter-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25 transition">
+              Pendentes (<span id="count-pending">0</span>)
+            </button>
+            <button type="button" onclick="setStatusFilter('Conferido OK')" data-filter="Conferido OK" class="filter-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/25 transition">
+              Conferidos OK (<span id="count-ok">0</span>)
+            </button>
+            <button type="button" onclick="setStatusFilter('Divergência')" data-filter="Divergência" class="filter-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/15 text-rose-700 dark:text-rose-400 hover:bg-rose-500/25 transition">
+              Divergências (<span id="count-div">0</span>)
+            </button>
+          </div>
+
+          <!-- Search Input -->
+          <div class="relative w-full sm:w-64">
+            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+            <input
+              type="text"
+              id="table-search"
+              oninput="renderPurchases()"
+              placeholder="Filtrar nome, talão ou artigo..."
+              class="w-full pl-9 pr-3 py-2 rounded-xl text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="hidden py-12 px-4 text-center">
+          <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z"/></svg>
+          </div>
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">Nenhuma compra registada neste filtro</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+            Utilize o formulário ao lado para registar a compra de um colaborador ou altere os filtros acima.
+          </p>
+        </div>
+
+        <!-- Mobile Cards List (Visible on small screens, hidden on md+ and print) -->
+        <div id="mobile-cards-list" class="no-print md:hidden space-y-3"></div>
+
+        <!-- Desktop & Print Table (Visible on md+ and always on print) -->
+        <div id="table-wrapper" class="hidden md:block print:block overflow-x-auto">
+          <table class="w-full text-left border-collapse print-table">
+            <thead>
+              <tr class="border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <th class="py-2.5 px-2.5">Hora</th>
+                <th class="py-2.5 px-2.5">Colaborador / Cargo</th>
+                <th class="py-2.5 px-2.5">Artigos Comprados</th>
+                <th class="py-2.5 px-2.5">Talão / Caixa</th>
+                <th class="py-2.5 px-2.5 text-right">Valor (Kz)</th>
+                <th class="py-2.5 px-2.5 text-center">Assinatura</th>
+                <th class="py-2.5 px-2.5">Estado CCTV</th>
+                <th class="no-print py-2.5 px-2.5 text-right">Validação Rápida</th>
+              </tr>
+            </thead>
+            <tbody id="desktop-table-body" class="divide-y divide-slate-100 dark:divide-slate-800/80 text-xs sm:text-sm"></tbody>
+            <tfoot class="border-t-2 border-slate-300 dark:border-slate-700 font-bold bg-slate-50 dark:bg-slate-800/50">
+              <tr>
+                <td colspan="4" class="py-2.5 px-3 text-xs uppercase text-slate-600 dark:text-slate-300">
+                  Total Geral do Turno (<span id="tfoot-count">0</span> registos)
+                </td>
+                <td id="tfoot-total" class="py-2.5 px-2.5 text-right font-mono text-sm font-extrabold text-slate-900 dark:text-white">
+                  0,00 Kz
+                </td>
+                <td colspan="3" class="py-2.5 px-2.5 text-[11px] text-slate-500 dark:text-slate-400">
+                  <span id="tfoot-summary">OK: 0 | Pendentes: 0 | Divergências: 0</span>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- PRINT-ONLY OFFICIAL SIGNATURES FOOTER -->
+        <div class="print-only hidden mt-8 pt-4">
+          <div class="grid grid-cols-3 gap-8 text-center text-xs">
+            <div>
+              <div class="border-b border-slate-800 h-10 mb-1"></div>
+              <p class="font-bold">Operador de CCTV</p>
+              <p class="text-[10px] text-slate-600" id="print-sig-cctv">João Domingos / Francisco Chivela</p>
+            </div>
+            <div>
+              <div class="border-b border-slate-800 h-10 mb-1"></div>
+              <p class="font-bold">Supervisor(a) de Loja</p>
+              <p class="text-[10px] text-slate-600">Adélia Chipepi / Dulce Lusitano / Victor João</p>
+            </div>
+            <div>
+              <div class="border-b border-slate-800 h-10 mb-1"></div>
+              <p class="font-bold">Gerência / Auditoria</p>
+              <p class="text-[10px] text-slate-600">Gamek Fresmart Express 1</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 2: EQUIPA & RESUMO DOS 36 COLABORADORES                          -->
+    <!-- ===================================================================== -->
+    <div id="view-equipa" class="hidden no-print bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-100 dark:border-slate-800">
+        <div>
+          <h2 class="text-lg font-extrabold text-slate-900 dark:text-white">Quadro de Colaboradores & Resumo Diário (36)</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Acompanhamento individual de compras e consumo por secção na loja Gamek Fresmart Express 1</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="team-role-filter" onchange="renderTeamView()" class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none">
+            <option value="ALL">Todas as Secções (36)</option>
+            <option value="Gerente">Gerente (5)</option>
+            <option value="Auditor">Auditor (1)</option>
+            <option value="Supervisor">Supervisor (3)</option>
+            <option value="Operador de CCTV">Operador de CCTV (2)</option>
+            <option value="Operador de Preço">Operador de Preço (1)</option>
+            <option value="Operador de Stock">Operador de Stock (4)</option>
+            <option value="Operador de Talho">Operador de Talho (4)</option>
+            <option value="Operador de Caixa">Operador de Caixa (6)</option>
+            <option value="Repositor">Repositor (8)</option>
+            <option value="Repositor do Fresco">Repositor do Fresco (2)</option>
+          </select>
+          <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer">
+            <input type="checkbox" id="team-only-active" onchange="renderTeamView()" class="rounded text-emerald-600" />
+            Apenas com compras hoje
+          </label>
+        </div>
+      </div>
+
+      <div id="team-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+    </div>
+
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. DATABASE: EXACT 36 COLLABORATORS & ROLES (GAMEK FRESMART EXPRESS 1)
+    // =========================================================================
+    const STAFF_LIST = [
+      // Gerente (5)
+      { name: "Antônio Bandola", role: "Gerente" },
+      { name: "Ety Monteiro", role: "Gerente" },
+      { name: "Manuel Guedes", role: "Gerente" },
+      { name: "Mateus Belmiro", role: "Gerente" },
+      { name: "Alexandre Correia", role: "Gerente" },
+      // Auditor (1)
+      { name: "Tiago Chissanha", role: "Auditor" },
+      // Supervisor (3)
+      { name: "Adélia Chipepi", role: "Supervisor" },
+      { name: "Dulce Lusitano", role: "Supervisor" },
+      { name: "Victor João", role: "Supervisor" },
+      // Operador de CCTV (2)
+      { name: "João Domingos", role: "Operador de CCTV" },
+      { name: "Francisco Chivela", role: "Operador de CCTV" },
+      // Operador de Preço (1)
+      { name: "Lolivaldo Madeira", role: "Operador de Preço" },
+      // Operador de Stock (4)
+      { name: "Araújo Mendes", role: "Operador de Stock" },
+      { name: "Ribeiro Francisco", role: "Operador de Stock" },
+      { name: "Henriques Brandão", role: "Operador de Stock" },
+      { name: "José Tchihinga", role: "Operador de Stock" },
+      // Operador de Talho (4)
+      { name: "Costa Hebo", role: "Operador de Talho" },
+      { name: "Claudio Avelino", role: "Operador de Talho" },
+      { name: "Rosa Bumba", role: "Operador de Talho" },
+      { name: "Regina Vidal", role: "Operador de Talho" },
+      // Operador de Caixa (6)
+      { name: "André José", role: "Operador de Caixa" },
+      { name: "Patrícia Francisco", role: "Operador de Caixa" },
+      { name: "Dialumbaka Augusto", role: "Operador de Caixa" },
+      { name: "Inês Nambelo", role: "Operador de Caixa" },
+      { name: "Teresa Leão", role: "Operador de Caixa" },
+      { name: "Domingos Fernando", role: "Operador de Caixa" },
+      // Repositor (8)
+      { name: "Agostinho da Costa", role: "Repositor" },
+      { name: "Joana Afonso", role: "Repositor" },
+      { name: "João Dalas", role: "Repositor" },
+      { name: "Ângela Bumba", role: "Repositor" },
+      { name: "Hélia Carvalho", role: "Repositor" },
+      { name: "Aldair Ferreira", role: "Repositor" },
+      { name: "Josefa Masuoka", role: "Repositor" },
+      { name: "Cecília Famoso", role: "Repositor" },
+      // Repositor do Fresco (2)
+      { name: "José Kazola", role: "Repositor do Fresco" },
+      { name: "Armando Samba", role: "Repositor do Fresco" }
+    ];
+
+    const STORAGE_KEY = "fresmart_express1_compras_v1";
+    const SETTINGS_KEY = "fresmart_express1_settings_v1";
+
+    // Application State
+    let purchases = [];
+    let currentFilter = "ALL";
+    let selectedCollaborator = null;
+    let hasSignatureDrawn = false;
+
+    // =========================================================================
+    // 2. INITIALIZATION & CLOCK (AFRICA/LUANDA)
+    // =========================================================================
+    window.addEventListener("DOMContentLoaded", () => {
+      initTheme();
+      loadState();
+      populateCollaboratorSelect();
+      setupCollaboratorSearch();
+      initSignaturePad();
+      setDefaultTimeInput();
+      startLuandaClock();
+      renderAll();
+    });
+
+    function getLuandaDateParts() {
+      const now = new Date();
+      try {
+        const timeStr = new Intl.DateTimeFormat("pt-PT", {
+          timeZone: "Africa/Luanda",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false
+        }).format(now);
+
+        const dateStr = new Intl.DateTimeFormat("pt-PT", {
+          timeZone: "Africa/Luanda",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric"
+        }).format(now);
+
+        const hmStr = new Intl.DateTimeFormat("pt-PT", {
+          timeZone: "Africa/Luanda",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        }).format(now);
+
+        return { timeStr, dateStr, hmStr };
+      } catch (e) {
+        const pad = (n) => String(n).padStart(2, "0");
+        return {
+          timeStr: `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
+          dateStr: `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`,
+          hmStr: `${pad(now.getHours())}:${pad(now.getMinutes())}`
+        };
+      }
+    }
+
+    function startLuandaClock() {
+      const update = () => {
+        const { timeStr, dateStr } = getLuandaDateParts();
+        document.getElementById("live-time").textContent = timeStr;
+        document.getElementById("live-date").textContent = `${dateStr} • Luanda`;
+      };
+      update();
+      setInterval(update, 1000);
+    }
+
+    function setDefaultTimeInput() {
+      const { hmStr } = getLuandaDateParts();
+      document.getElementById("purchase-time").value = hmStr;
+    }
+
+    // =========================================================================
+    // 3. THEME & PERSISTENCE (LOCALSTORAGE)
+    // =========================================================================
+    function initTheme() {
+      const savedTheme = localStorage.getItem("fresmart_theme");
+      if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+        document.documentElement.classList.add("dark");
+      }
+      const toggleFn = () => {
+        document.documentElement.classList.toggle("dark");
+        const isDark = document.documentElement.classList.contains("dark");
+        localStorage.setItem("fresmart_theme", isDark ? "dark" : "light");
+      };
+      document.getElementById("theme-toggle-mobile").addEventListener("click", toggleFn);
+      document.getElementById("theme-toggle-desktop").addEventListener("click", toggleFn);
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) purchases = JSON.parse(raw);
+
+        const settingsRaw = localStorage.getItem(SETTINGS_KEY);
+        if (settingsRaw) {
+          const settings = JSON.parse(settingsRaw);
+          if (settings.cctvOperator) document.getElementById("cctv-operator-select").value = settings.cctvOperator;
+          if (settings.shift) document.getElementById("shift-select").value = settings.shift;
+        }
+      } catch (err) {
+        console.error("Erro ao ler dados locais:", err);
+        purchases = [];
+      }
+
+      document.getElementById("cctv-operator-select").addEventListener("change", saveSettings);
+      document.getElementById("shift-select").addEventListener("change", saveSettings);
+    }
+
+    function saveSettings() {
+      const settings = {
+        cctvOperator: document.getElementById("cctv-operator-select").value,
+        shift: document.getElementById("shift-select").value
+      };
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    }
+
+    function savePurchases() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(purchases));
+      } catch (err) {
+        showToast("Aviso: Armazenamento local cheio. Exporte o CSV.", "error");
+      }
+    }
+
+    // =========================================================================
+    // 4. COLLABORATOR SEARCH & AUTO-ROLE BINDING
+    // =========================================================================
+    function normalizeText(str) {
+      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    }
+
+    function populateCollaboratorSelect() {
+      const select = document.getElementById("collab-select");
+      // Group by role for clean navigation
+      const grouped = {};
+      STAFF_LIST.forEach((person) => {
+        if (!grouped[person.role]) grouped[person.role] = [];
+        grouped[person.role].push(person);
+      });
+
+      Object.keys(grouped).forEach((role) => {
+        const optGroup = document.createElement("optgroup");
+        optGroup.label = role;
+        grouped[role].forEach((person) => {
+          const opt = document.createElement("option");
+          opt.value = person.name;
+          opt.textContent = `${person.name} (${person.role})`;
+          optGroup.appendChild(opt);
+        });
+        select.appendChild(optGroup);
+      });
+
+      select.addEventListener("change", (e) => {
+        const found = STAFF_LIST.find((p) => p.name === e.target.value);
+        if (found) {
+          selectCollaborator(found);
+        } else {
+          clearSelectedCollaborator();
+        }
+      });
+    }
+
+    function setupCollaboratorSearch() {
+      const input = document.getElementById("collab-search");
+      const dropdown = document.getElementById("collab-dropdown");
+
+      input.addEventListener("input", () => {
+        const query = normalizeText(input.value.trim());
+        if (!query) {
+          dropdown.classList.add("hidden");
+          return;
+        }
+        const matches = STAFF_LIST.filter(
+          (p) => normalizeText(p.name).includes(query) || normalizeText(p.role).includes(query)
+        );
+
+        if (matches.length === 0) {
+          dropdown.innerHTML = `<div class="px-3.5 py-2.5 text-xs text-slate-500">Nenhum colaborador encontrado</div>`;
+        } else {
+          dropdown.innerHTML = matches
+            .map(
+              (p) => `
+              <button type="button" data-name="${p.name}" class="w-full text-left px-3.5 py-2.5 hover:bg-emerald-50 dark:hover:bg-slate-700/70 flex items-center justify-between gap-2 transition">
+                <span class="text-sm font-bold text-slate-900 dark:text-white">${p.name}</span>
+                <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">${p.role}</span>
+              </button>
+            `
+            )
+            .join("");
+
+          dropdown.querySelectorAll("button[data-name]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const found = STAFF_LIST.find((p) => p.name === btn.getAttribute("data-name"));
+              if (found) selectCollaborator(found);
+              dropdown.classList.add("hidden");
+            });
+          });
+        }
+        dropdown.classList.remove("hidden");
+      });
+
+      document.addEventListener("click", (e) => {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+          dropdown.classList.add("hidden");
+        }
+      });
+    }
+
+    function selectCollaborator(person) {
+      selectedCollaborator = person;
+      document.getElementById("collab-search").value = person.name;
+      document.getElementById("collab-select").value = person.name;
+      const roleDisplay = document.getElementById("collab-role-display");
+      roleDisplay.textContent = person.role;
+      roleDisplay.className =
+        "px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 truncate";
+    }
+
+    function clearSelectedCollaborator() {
+      selectedCollaborator = null;
+      document.getElementById("collab-search").value = "";
+      document.getElementById("collab-select").value = "";
+      const roleDisplay = document.getElementById("collab-role-display");
+      roleDisplay.textContent = "Selecione um colaborador";
+      roleDisplay.className =
+        "px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 text-slate-500 dark:text-slate-400 truncate";
+    }
+
+    // =========================================================================
+    // 5. TOUCH SIGNATURE PAD (CANVAS)
+    // =========================================================================
+    let sigCanvas, sigCtx, isDrawing = false;
+
+    function initSignaturePad() {
+      sigCanvas = document.getElementById("signature-pad");
+      sigCtx = sigCanvas.getContext("2d");
+
+      const resizeCanvas = () => {
+        const rect = sigCanvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        sigCanvas.width = rect.width * dpr;
+        sigCanvas.height = rect.height * dpr;
+        sigCtx.scale(dpr, dpr);
+        sigCtx.lineWidth = 2.2;
+        sigCtx.lineCap = "round";
+        sigCtx.lineJoin = "round";
+        sigCtx.strokeStyle = "#0f172a";
+      };
+
+      resizeCanvas();
+      window.addEventListener("resize", () => {
+        if (!hasSignatureDrawn) resizeCanvas();
+      });
+
+      const getCoords = (e) => {
+        const rect = sigCanvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return { x: clientX - rect.left, y: clientY - rect.top };
+      };
+
+      const startDraw = (e) => {
+        isDrawing = true;
+        hasSignatureDrawn = true;
+        document.getElementById("sig-placeholder").classList.add("hidden");
+        const { x, y } = getCoords(e);
+        sigCtx.beginPath();
+        sigCtx.moveTo(x, y);
+      };
+
+      const draw = (e) => {
+        if (!isDrawing) return;
+        if (e.cancelable) e.preventDefault();
+        const { x, y } = getCoords(e);
+        sigCtx.lineTo(x, y);
+        sigCtx.stroke();
+      };
+
+      const stopDraw = () => {
+        if (isDrawing) {
+          isDrawing = false;
+          sigCtx.closePath();
+        }
+      };
+
+      sigCanvas.addEventListener("mousedown", startDraw);
+      sigCanvas.addEventListener("mousemove", draw);
+      window.addEventListener("mouseup", stopDraw);
+
+      sigCanvas.addEventListener("touchstart", startDraw, { passive: false });
+      sigCanvas.addEventListener("touchmove", draw, { passive: false });
+      sigCanvas.addEventListener("touchend", stopDraw);
+    }
+
+    function clearSignaturePad() {
+      const rect = sigCanvas.getBoundingClientRect();
+      sigCtx.clearRect(0, 0, rect.width, rect.height);
+      hasSignatureDrawn = false;
+      document.getElementById("sig-placeholder").classList.remove("hidden");
+    }
+
+    function getSignatureDataURL() {
+      if (!hasSignatureDrawn) return null;
+      return sigCanvas.toDataURL("image/png");
+    }
+
+    // =========================================================================
+    // 6. CRUD OPERATIONS & QUICK CCTV VALIDATION
+    // =========================================================================
+    function handleFormSubmit(e) {
+      e.preventDefault();
+
+      // Resolve collaborator from either search or select
+      if (!selectedCollaborator) {
+        const typed = normalizeText(document.getElementById("collab-search").value.trim());
+        const exact = STAFF_LIST.find((p) => normalizeText(p.name) === typed);
+        if (exact) {
+          selectedCollaborator = exact;
+        } else {
+          showToast("Por favor, selecione um colaborador válido da lista.", "error");
+          document.getElementById("collab-search").focus();
+          return;
+        }
+      }
+
+      const editId = document.getElementById("edit-record-id").value;
+      const time = document.getElementById("purchase-time").value;
+      const items = document.getElementById("purchase-items").value.trim();
+      const receipt = document.getElementById("receipt-number").value.trim();
+      const amount = parseFloat(document.getElementById("total-kz").value);
+      const cashier = document.getElementById("cashier-select").value;
+      const status = document.getElementById("initial-status").value;
+      const cctvOperator = document.getElementById("cctv-operator-select").value;
+      const shift = document.getElementById("shift-select").value;
+      const quickConfirm = document.getElementById("quick-confirm-check").checked;
+      const signatureData = getSignatureDataURL();
+      const { dateStr } = getLuandaDateParts();
+
+      if (isNaN(amount) || amount < 0) {
+        showToast("Insira um valor válido em Kwanzas (Kz).", "error");
+        return;
+      }
+
+      if (editId) {
+        const idx = purchases.findIndex((p) => p.id === editId);
+        if (idx !== -1) {
+          purchases[idx] = {
+            ...purchases[idx],
+            collaboratorName: selectedCollaborator.name,
+            collaboratorRole: selectedCollaborator.role,
+            time,
+            items,
+            receipt,
+            amount,
+            cashier,
+            status,
+            cctvOperator,
+            signature: signatureData || purchases[idx].signature,
+            quickConfirm: signatureData ? false : quickConfirm
+          };
+          showToast(`Registo de ${selectedCollaborator.name} atualizado!`, "success");
+        }
+      } else {
+        const newRecord = {
+          id: "REC-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+          date: dateStr,
+          time,
+          collaboratorName: selectedCollaborator.name,
+          collaboratorRole: selectedCollaborator.role,
+          items,
+          receipt,
+          amount,
+          cashier,
+          status,
+          cctvOperator,
+          shift,
+          signature: signatureData,
+          quickConfirm: !signatureData && quickConfirm
+        };
+        purchases.unshift(newRecord);
+        showToast(`Compra de ${selectedCollaborator.name} registada!`, "success");
+      }
+
+      savePurchases();
+      resetForm();
+      renderAll();
+    }
+
+    function resetForm() {
+      document.getElementById("purchase-form").reset();
+      document.getElementById("edit-record-id").value = "";
+      document.getElementById("form-heading").textContent = "Novo Registo de Compra";
+      document.getElementById("submit-btn-text").textContent = "Registar Compra na Folha";
+      document.getElementById("cancel-edit-btn").classList.add("hidden");
+      clearSelectedCollaborator();
+      clearSignaturePad();
+      setDefaultTimeInput();
+    }
+
+    function editRecord(id) {
+      const rec = purchases.find((p) => p.id === id);
+      if (!rec) return;
+
+      const person = STAFF_LIST.find((p) => p.name === rec.collaboratorName) || {
+        name: rec.collaboratorName,
+        role: rec.collaboratorRole
+      };
+      selectCollaborator(person);
+
+      document.getElementById("edit-record-id").value = rec.id;
+      document.getElementById("purchase-time").value = rec.time;
+      document.getElementById("purchase-items").value = rec.items;
+      document.getElementById("receipt-number").value = rec.receipt;
+      document.getElementById("total-kz").value = rec.amount;
+      document.getElementById("cashier-select").value = rec.cashier;
+      document.getElementById("initial-status").value = rec.status;
+      document.getElementById("quick-confirm-check").checked = !!rec.quickConfirm;
+
+      document.getElementById("form-heading").textContent = "Editar Registo de Compra";
+      document.getElementById("submit-btn-text").textContent = "Guardar Alterações";
+      document.getElementById("cancel-edit-btn").classList.remove("hidden");
+
+      switchTab("registo");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function setRecordStatus(id, newStatus) {
+      const rec = purchases.find((p) => p.id === id);
+      if (!rec) return;
+      rec.status = newStatus;
+      rec.cctvOperator = document.getElementById("cctv-operator-select").value;
+      savePurchases();
+      renderAll();
+
+      const label =
+        newStatus === "Conferido OK"
+          ? "Conferido OK pelo CCTV"
+          : newStatus === "Divergência"
+          ? "Marcado com Divergência!"
+          : "Marcado como Pendente";
+      showToast(`${rec.collaboratorName}: ${label}`, newStatus === "Divergência" ? "error" : "success");
+    }
+
+    function deleteRecord(id) {
+      const rec = purchases.find((p) => p.id === id);
+      if (!rec) return;
+
+      openConfirmModal(
+        "Eliminar Registo",
+        `Tem a certeza que pretende eliminar o registo de ${rec.collaboratorName} (Talão: ${rec.receipt} — ${formatKz(rec.amount)})?`,
+        () => {
+          purchases = purchases.filter((p) => p.id !== id);
+          savePurchases();
+          renderAll();
+          showToast("Registo eliminado da folha.", "info");
+        }
+      );
+    }
+
+    function confirmClearDay() {
+      if (purchases.length === 0) {
+        showToast("A folha já se encontra limpa.", "info");
+        return;
+      }
+      openConfirmModal(
+        "Limpar Dia / Iniciar Novo Turno",
+        `Esta ação vai apagar todos os ${purchases.length} registos atuais para iniciar um novo dia/turno. Recomenda-se exportar CSV ou copiar o resumo WhatsApp antes. Deseja continuar?`,
+        () => {
+          purchases = [];
+          savePurchases();
+          resetForm();
+          renderAll();
+          showToast("Folha limpa! Pronto para o novo turno.", "success");
+        }
+      );
+    }
+
+    // =========================================================================
+    // 7. RENDERING: KPIs, TABLE, MOBILE CARDS & TEAM VIEW
+    // =========================================================================
+    function formatKz(value) {
+      const num = Number(value) || 0;
+      return (
+        num.toLocaleString("pt-PT", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }) + " Kz"
+      );
+    }
+
+    function renderAll() {
+      updateKPIs();
+      renderPurchases();
+      renderTeamView();
+    }
+
+    function updateKPIs() {
+      const totalCount = purchases.length;
+      const totalAmount = purchases.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+      const okCount = purchases.filter((r) => r.status === "Conferido OK").length;
+      const pendingCount = purchases.filter((r) => r.status === "Pendente CCTV").length;
+      const divCount = purchases.filter((r) => r.status === "Divergência").length;
+
+      document.getElementById("kpi-count").textContent = totalCount;
+      document.getElementById("kpi-total-kz").textContent = formatKz(totalAmount);
+      document.getElementById("kpi-ok").textContent = okCount;
+      document.getElementById("kpi-pending").textContent = pendingCount;
+      document.getElementById("kpi-div").textContent = divCount;
+
+      document.getElementById("count-all").textContent = totalCount;
+      document.getElementById("count-ok").textContent = okCount;
+      document.getElementById("count-pending").textContent = pendingCount;
+      document.getElementById("count-div").textContent = divCount;
+
+      document.getElementById("tfoot-count").textContent = totalCount;
+      document.getElementById("tfoot-total").textContent = formatKz(totalAmount);
+      document.getElementById("tfoot-summary").textContent = `OK: ${okCount} | Pendentes: ${pendingCount} | Divergências: ${divCount}`;
+    }
+
+    function setStatusFilter(filter) {
+      currentFilter = filter;
+      document.querySelectorAll(".filter-pill").forEach((btn) => {
+        const f = btn.getAttribute("data-filter");
+        if (f === filter) {
+          btn.classList.add("ring-2", "ring-offset-1", "ring-emerald-500");
+        } else {
+          btn.classList.remove("ring-2", "ring-offset-1", "ring-emerald-500");
+        }
+      });
+      renderPurchases();
+    }
+
+    function getStatusBadgeHTML(status) {
+      if (status === "Conferido OK") {
+        return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">🟢 Conferido OK</span>`;
+      }
+      if (status === "Divergência") {
+        return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30">🔴 Divergência</span>`;
+      }
+      return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">🟡 Pendente CCTV</span>`;
+    }
+
+    function renderPurchases() {
+      const searchQ = normalizeText(document.getElementById("table-search").value.trim());
+
+      const filtered = purchases.filter((r) => {
+        const matchesStatus = currentFilter === "ALL" || r.status === currentFilter;
+        const matchesSearch =
+          !searchQ ||
+          normalizeText(r.collaboratorName).includes(searchQ) ||
+          normalizeText(r.collaboratorRole).includes(searchQ) ||
+          normalizeText(r.receipt).includes(searchQ) ||
+          normalizeText(r.items).includes(searchQ) ||
+          normalizeText(r.cashier).includes(searchQ);
+        return matchesStatus && matchesSearch;
+      });
+
+      const emptyEl = document.getElementById("empty-state");
+      const tbody = document.getElementById("desktop-table-body");
+      const mobileList = document.getElementById("mobile-cards-list");
+
+      if (filtered.length === 0) {
+        emptyEl.classList.remove("hidden");
+        tbody.innerHTML = "";
+        mobileList.innerHTML = "";
+        return;
+      }
+
+      emptyEl.classList.add("hidden");
+
+      // Render Desktop & Print Table Rows
+      tbody.innerHTML = filtered
+        .map((r) => {
+          const sigCell = r.signature
+            ? `<button type="button" onclick="openSigModal('${r.id}')" class="inline-flex flex-col items-center group" title="Ver assinatura ampliada">
+                 <img src="${r.signature}" alt="Assinatura" class="h-7 max-w-[80px] object-contain bg-white rounded border border-slate-200 px-1 sig-print-img" />
+               </button>`
+            : r.quickConfirm
+            ? `<span class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">✔ Confirmado</span>`
+            : `<span class="text-[11px] text-slate-400">—</span>`;
+
+          return `
+            <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+              <td class="py-3 px-2.5 font-mono font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">${r.time}</td>
+              <td class="py-3 px-2.5">
+                <div class="font-bold text-slate-900 dark:text-white leading-tight">${escapeHTML(r.collaboratorName)}</div>
+                <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">${escapeHTML(r.collaboratorRole)}</div>
+              </td>
+              <td class="py-3 px-2.5 max-w-[210px]">
+                <div class="text-slate-800 dark:text-slate-200 text-xs leading-snug">${escapeHTML(r.items)}</div>
+              </td>
+              <td class="py-3 px-2.5 whitespace-nowrap">
+                <div class="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">${escapeHTML(r.receipt)}</div>
+                <div class="text-[11px] text-slate-500 dark:text-slate-400">Cx: ${escapeHTML(r.cashier)}</div>
+              </td>
+              <td class="py-3 px-2.5 text-right font-mono font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
+                ${formatKz(r.amount)}
+              </td>
+              <td class="py-3 px-2.5 text-center">
+                ${sigCell}
+              </td>
+              <td class="py-3 px-2.5 whitespace-nowrap">
+                ${getStatusBadgeHTML(r.status)}
+                <div class="text-[10px] text-slate-400 mt-0.5">CCTV: ${escapeHTML(r.cctvOperator || "")}</div>
+              </td>
+              <td class="no-print py-3 px-2.5 text-right whitespace-nowrap">
+                <div class="inline-flex items-center gap-1">
+                  <button type="button" onclick="setRecordStatus('${r.id}', 'Conferido OK')" title="Validar Conferido OK" class="p-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-400 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                  </button>
+                  <button type="button" onclick="setRecordStatus('${r.id}', 'Divergência')" title="Marcar Divergência" class="p-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-400 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+                  </button>
+                  <button type="button" onclick="editRecord('${r.id}')" title="Editar Registo" class="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+                  </button>
+                  <button type="button" onclick="deleteRecord('${r.id}')" title="Eliminar" class="p-2 rounded-lg bg-slate-100 hover:bg-rose-500/20 dark:bg-slate-800 text-slate-500 hover:text-rose-600 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      // Render Mobile Touch Cards
+      mobileList.innerHTML = filtered
+        .map((r) => {
+          return `
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/50 p-3.5 space-y-2.5">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-mono text-xs font-extrabold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">${r.time}</span>
+                    <span class="text-sm font-extrabold text-slate-900 dark:text-white">${escapeHTML(r.collaboratorName)}</span>
+                  </div>
+                  <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">${escapeHTML(r.collaboratorRole)} • Cx: ${escapeHTML(r.cashier)}</div>
+                </div>
+                <div class="text-right">
+                  <div class="font-mono text-sm font-extrabold text-blue-600 dark:text-blue-400">${formatKz(r.amount)}</div>
+                  <div class="font-mono text-[11px] text-slate-500">Talão: ${escapeHTML(r.receipt)}</div>
+                </div>
+              </div>
+
+              <div class="text-xs text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900/80 rounded-xl p-2.5 border border-slate-200/70 dark:border-slate-700/70">
+                ${escapeHTML(r.items)}
+              </div>
+
+              <div class="flex items-center justify-between gap-2 pt-1">
+                <div>${getStatusBadgeHTML(r.status)}</div>
+                ${
+                  r.signature
+                    ? `<button type="button" onclick="openSigModal('${r.id}')" class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 underline">Ver Assinatura</button>`
+                    : r.quickConfirm
+                    ? `<span class="text-[11px] font-semibold text-slate-500">✔ Confirmado</span>`
+                    : ""
+                }
+              </div>
+
+              <!-- Touch Action Bar -->
+              <div class="grid grid-cols-4 gap-1.5 pt-1 border-t border-slate-200/70 dark:border-slate-700/70">
+                <button type="button" onclick="setRecordStatus('${r.id}', 'Conferido OK')" class="py-2 px-2 rounded-xl text-[11px] font-extrabold bg-emerald-600 text-white flex items-center justify-center gap-1">
+                  ✓ OK
+                </button>
+                <button type="button" onclick="setRecordStatus('${r.id}', 'Divergência')" class="py-2 px-2 rounded-xl text-[11px] font-extrabold bg-rose-600 text-white flex items-center justify-center gap-1">
+                  ! Diverg.
+                </button>
+                <button type="button" onclick="editRecord('${r.id}')" class="py-2 px-2 rounded-xl text-[11px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white flex items-center justify-center">
+                  Editar
+                </button>
+                <button type="button" onclick="deleteRecord('${r.id}')" class="py-2 px-2 rounded-xl text-[11px] font-bold bg-slate-200 dark:bg-slate-700 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                  Apagar
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    // =========================================================================
+    // 8. TEAM & DAILY SUMMARY VIEW (ALL 36 COLLABORATORS)
+    // =========================================================================
+    function renderTeamView() {
+      const roleFilter = document.getElementById("team-role-filter").value;
+      const onlyActive = document.getElementById("team-only-active").checked;
+      const grid = document.getElementById("team-grid");
+
+      const statsByCollab = {};
+      purchases.forEach((p) => {
+        if (!statsByCollab[p.collaboratorName]) {
+          statsByCollab[p.collaboratorName] = { count: 0, total: 0 };
+        }
+        statsByCollab[p.collaboratorName].count += 1;
+        statsByCollab[p.collaboratorName].total += Number(p.amount) || 0;
+      });
+
+      const list = STAFF_LIST.filter((person) => {
+        const matchesRole = roleFilter === "ALL" || person.role === roleFilter;
+        const stat = statsByCollab[person.name] || { count: 0, total: 0 };
+        const matchesActive = !onlyActive || stat.count > 0;
+        return matchesRole && matchesActive;
+      });
+
+      if (list.length === 0) {
+        grid.innerHTML = `<div class="col-span-full py-10 text-center text-sm text-slate-500">Nenhum colaborador encontrado para este filtro.</div>`;
+        return;
+      }
+
+      grid.innerHTML = list
+        .map((person) => {
+          const stat = statsByCollab[person.name] || { count: 0, total: 0 };
+          const hasPurchases = stat.count > 0;
+          return `
+            <div class="p-3.5 rounded-2xl border ${
+              hasPurchases
+                ? "border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-500/10"
+                : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40"
+            } flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-bold text-sm text-slate-900 dark:text-white truncate">${escapeHTML(person.name)}</div>
+                <div class="text-xs font-medium text-slate-500 dark:text-slate-400">${escapeHTML(person.role)}</div>
+              </div>
+              <div class="text-right shrink-0">
+                <div class="font-mono text-sm font-extrabold ${
+                  hasPurchases ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"
+                }">
+                  ${formatKz(stat.total)}
+                </div>
+                <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  ${stat.count} ${stat.count === 1 ? "compra" : "compras"}
+                </div>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    function switchTab(tabName) {
+      const regView = document.getElementById("view-registo");
+      const eqView = document.getElementById("view-equipa");
+      const tabReg = document.getElementById("tab-registo");
+      const tabEq = document.getElementById("tab-equipa");
+
+      if (tabName === "registo") {
+        regView.classList.remove("hidden");
+        eqView.classList.add("hidden");
+        tabReg.className =
+          "flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition bg-emerald-600 text-white shadow";
+        tabEq.className =
+          "flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800";
+      } else {
+        regView.classList.add("hidden");
+        eqView.classList.remove("hidden");
+        renderTeamView();
+        tabEq.className =
+          "flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition bg-emerald-600 text-white shadow";
+        tabReg.className =
+          "flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800";
+      }
+    }
+
+    // =========================================================================
+    // 9. STORE WORKFLOW EXPORTS: WHATSAPP, CSV/EXCEL & PRINT A4
+    // =========================================================================
+    function copyWhatsAppSummary() {
+      const { dateStr, timeStr } = getLuandaDateParts();
+      const cctvOp = document.getElementById("cctv-operator-select").value;
+      const shift = document.getElementById("shift-select").value;
+
+      const totalCount = purchases.length;
+      const totalAmount = purchases.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+      const okCount = purchases.filter((r) => r.status === "Conferido OK").length;
+      const pendingCount = purchases.filter((r) => r.status === "Pendente CCTV").length;
+      const divCount = purchases.filter((r) => r.status === "Divergência").length;
+
+      let lines = [
+        `*CONTROLO DE COMPRAS COLABORADORES — GAMEK FRESMART EXPRESS 1*`,
+        `📅 *Data:* ${dateStr} (${timeStr})`,
+        `🕒 *Turno:* ${shift}`,
+        `📹 *Operador CCTV:* ${cctvOp}`,
+        `------------------------------------`,
+        `📊 *RESUMO DO TURNO:*`,
+        `• Total Registos: *${totalCount}*`,
+        `• Valor Total: *${formatKz(totalAmount)}*`,
+        `• 🟢 Conferidos OK: *${okCount}*`,
+        `• 🟡 Pendentes CCTV: *${pendingCount}*`,
+        `• 🔴 Divergências: *${divCount}*`,
+        `------------------------------------`
+      ];
+
+      if (purchases.length === 0) {
+        lines.push(`_Sem compras registadas até ao momento._`);
+      } else {
+        lines.push(`*DETALHE DAS COMPRAS:*`);
+        purchases
+          .slice()
+          .reverse()
+          .forEach((r, i) => {
+            const icon = r.status === "Conferido OK" ? "🟢" : r.status === "Divergência" ? "🔴" : "🟡";
+            lines.push(
+              `${i + 1}. ${icon} *[${r.time}] ${r.collaboratorName}* (${r.collaboratorRole})\n   Artigos: ${r.items}\n   Talão: ${r.receipt} | Cx: ${r.cashier} | *${formatKz(r.amount)}*`
+            );
+          });
+      }
+
+      const textToCopy = lines.join("\n");
+
+      // Reliable clipboard copy inside sandboxed/iframe environments
+      const textArea = document.createElement("textarea");
+      textArea.value = textToCopy;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand("copy");
+        showToast("Resumo copiado! Pronto para colar no WhatsApp.", "success");
+      } catch (err) {
+        showToast("Não foi possível copiar automaticamente.", "error");
+      }
+      document.body.removeChild(textArea);
+    }
+
+    function exportCSV() {
+      if (purchases.length === 0) {
+        showToast("Não existem registos para exportar.", "error");
+        return;
+      }
+
+      const { dateStr } = getLuandaDateParts();
+      const headers = [
+        "Data",
+        "Hora",
+        "Nome do Colaborador",
+        "Funcao / Cargo",
+        "Artigos Comprados",
+        "N. Talao / Fatura",
+        "Valor Total (Kz)",
+        "Operador de Caixa",
+        "Estado CCTV",
+        "Operador CCTV",
+        "Turno",
+        "Assinatura"
+      ];
+
+      const escapeCSV = (val) => `"${String(val ?? "").replace(/"/g, '""')}"`;
+
+      const rows = purchases
+        .slice()
+        .reverse()
+        .map((r) => [
+          r.date || dateStr,
+          r.time,
+          r.collaboratorName,
+          r.collaboratorRole,
+          r.items,
+          r.receipt,
+          Number(r.amount).toFixed(2).replace(".", ","),
+          r.cashier,
+          r.status,
+          r.cctvOperator,
+          r.shift,
+          r.signature ? "Assinado Digitalmente" : r.quickConfirm ? "Confirmado Presencial" : "Pendente"
+        ]);
+
+      // UTF-8 BOM + Semicolon separator for Portuguese Excel compatibility
+      const csvContent =
+        "\uFEFF" +
+        [headers.map(escapeCSV).join(";"), ...rows.map((row) => row.map(escapeCSV).join(";"))].join("\r\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const cleanDate = dateStr.replace(/\//g, "-");
+      a.href = url;
+      a.download = `Controlo_Compras_Gamek_Fresmart_Express1_${cleanDate}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast("Ficheiro CSV / Excel transferido com sucesso!", "success");
+    }
+
+    function printSheet() {
+      const { dateStr } = getLuandaDateParts();
+      const cctvOp = document.getElementById("cctv-operator-select").value;
+      const shift = document.getElementById("shift-select").value;
+
+      document.getElementById("print-date").textContent = dateStr;
+      document.getElementById("print-shift").textContent = shift;
+      document.getElementById("print-cctv-op").textContent = cctvOp;
+      document.getElementById("print-sig-cctv").textContent = cctvOp;
+
+      window.print();
+    }
+
+    // =========================================================================
+    // 10. MODALS, TOASTS & SECURITY HELPERS
+    // =========================================================================
+    function openSigModal(id) {
+      const rec = purchases.find((p) => p.id === id);
+      if (!rec || !rec.signature) return;
+      document.getElementById("sig-modal-meta").textContent = `${rec.collaboratorName} (${rec.collaboratorRole}) • ${rec.date} às ${rec.time} • Talão: ${rec.receipt}`;
+      document.getElementById("sig-modal-img").src = rec.signature;
+      const modal = document.getElementById("sig-modal");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+
+    function closeSigModal() {
+      const modal = document.getElementById("sig-modal");
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    function openConfirmModal(title, message, onConfirm) {
+      const modal = document.getElementById("confirm-modal");
+      document.getElementById("confirm-title").textContent = title;
+      document.getElementById("confirm-message").textContent = message;
+
+      const okBtn = document.getElementById("confirm-ok-btn");
+      const cancelBtn = document.getElementById("confirm-cancel-btn");
+
+      const cleanup = () => {
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+        okBtn.onclick = null;
+        cancelBtn.onclick = null;
+      };
+
+      okBtn.onclick = () => {
+        cleanup();
+        onConfirm();
+      };
+      cancelBtn.onclick = cleanup;
+
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+
+    function showToast(message, type = "info") {
+      const container = document.getElementById("toast-container");
+      const toast = document.createElement("div");
+
+      const styles =
+        type === "success"
+          ? "bg-emerald-600 text-white border-emerald-500"
+          : type === "error"
+          ? "bg-rose-600 text-white border-rose-500"
+          : "bg-slate-800 text-white border-slate-700";
+
+      toast.className = `pointer-events-auto px-4 py-3 rounded-xl border shadow-xl text-xs sm:text-sm font-bold flex items-center justify-between gap-3 transition-all duration-300 ${styles}`;
+      toast.innerHTML = `<span>${escapeHTML(message)}</span>`;
+
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateY(-8px)";
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    function escapeHTML(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+  </script>
+</body>
+</html>
